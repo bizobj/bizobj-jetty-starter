@@ -1,0 +1,1 @@
+Keep the file with current name, because jetty-runner need this file to detect the WebApp directory.
