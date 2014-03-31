@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.bizobj</groupId>
 	<artifactId>jetty-starter</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>0.1</version>
 	<name>jetty-starter</name>
 	<description>The Java Web Application Starter based Jetty</description>
 
