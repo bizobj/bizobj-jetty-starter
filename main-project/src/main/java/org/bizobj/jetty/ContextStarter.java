@@ -2,8 +2,10 @@ package org.bizobj.jetty;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.util.Arrays;
 import java.util.Properties;
 
 import javax.naming.Context;
@@ -16,6 +18,7 @@ import javax.sql.DataSource;
 
 import org.apache.commons.dbcp.BasicDataSourceFactory;
 import org.apache.jasper.servlet.JspServlet;
+import org.bizobj.jetty.utils.Misc;
 import org.eclipse.jetty.jndi.NamingUtil;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
@@ -25,7 +28,12 @@ import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.util.resource.FileResource;
 import org.eclipse.jetty.util.resource.Resource;
+import org.eclipse.jetty.util.resource.ResourceCollection;
+import org.eclipse.jetty.webapp.MetaData;
+import org.eclipse.jetty.webapp.MetaInfConfiguration;
+import org.eclipse.jetty.webapp.Ordering;
 import org.eclipse.jetty.webapp.WebAppContext;
+import org.eclipse.jetty.webapp.WebInfConfiguration;
 
 /**
  * The jetty server to start development workspace.<br/>
@@ -135,6 +143,8 @@ public class ContextStarter {
         web.setBaseResource(res);
         web.setContextPath("/" + es.ctxPath);
         web.setParentLoaderPriority(true);
+        //Apply resources in jars' META-INF/resources, and web-fragment.xml in jars
+        applyMetaInfResourcesAndFragmentXml(web);
         //Default servlet
         web.addServlet(DefaultServlet.class, "/");
         //JSP servlet
@@ -143,6 +153,37 @@ public class ContextStarter {
         return web;
     }
 
+    /**
+     * Apply resources in jars' META-INF/resources, and web-fragment.xml in jars;
+     * See {@link MetaInfConfiguration#preConfigure(WebAppContext)}, {@link WebInfConfiguration#configure(WebAppContext)},
+     * {@link MetaData#setDefaults(Resource)}, {@link MetaData#orderFragments()} for detail.
+     * @param ctx
+     * @throws Exception 
+     * @throws IOException 
+     * @throws MalformedURLException 
+     */
+    private static void applyMetaInfResourcesAndFragmentXml(WebAppContext ctx) throws MalformedURLException, IOException, Exception{
+    	String[] metaInfResources = Misc.findClasspathResources("META-INF/resources");
+    	Resource[] collection=new Resource[]{
+        		ctx.getBaseResource(),
+        		new ResourceCollection(metaInfResources)
+        };
+        ctx.setBaseResource(new ResourceCollection(collection));
+
+    	String[] fragmentXmls = Misc.findClasspathResources("META-INF/web-fragment.xml");
+    	//FIXME We need sort here, because by default, web-fragment.xml files should be loaded by the order of jar's name
+    	Arrays.sort(fragmentXmls);
+        ctx.getMetaData().setOrdering(new Ordering.RelativeOrdering(ctx.getMetaData()));
+    	//Yes, they're always like "jar:/path/file.jar!/META-INF/web-fragment.xml"
+    	//FIXME Can't support web-fragment.xml in class folder
+    	for (int i = 0; i < fragmentXmls.length; i++) {
+			String xmlRes = fragmentXmls[i];
+			String jarRes = xmlRes.substring("jar:".length(), xmlRes.length()-"!/META-INF/web-fragment.xml".length());
+			ctx.getMetaData().addWebInfJar(Resource.newResource(jarRes));	//Jetty should auto-search web-fragment in WEB-INF jars
+		}
+    	ctx.getMetaData().orderFragments();
+    }
+    
     /**
      * Get the resource of specified web content folder
      * @param resourceFileName
