@@ -88,7 +88,7 @@ public class ContextStarter {
         System.setProperty("org.eclipse.jetty.LEVEL", "ALL");
         System.setProperty("org.eclipse.jetty.util.log.SOURCE", "false");
         //JSP Compiler setting
-        System.setProperty("org.apache.jasper.compiler.disablejsr199", "true");
+        //System.setProperty("org.apache.jasper.compiler.disablejsr199", "true");
         
         //Try to stop the previous server instance
         URL stop = new URL("http://127.0.0.1:" + es.httpPort + "/STOP");
