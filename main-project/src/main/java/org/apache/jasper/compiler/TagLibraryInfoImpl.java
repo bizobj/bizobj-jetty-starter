@@ -103,7 +103,7 @@ import org.apache.jasper.runtime.TldScanner;
  * @author Kin-man Chung
  * @author Jan Luehe
  */
-public class TagLibraryInfoImpl extends TagLibraryInfo implements TagConstants {
+@SuppressWarnings({"rawtypes","unused"}) public class TagLibraryInfoImpl extends TagLibraryInfo implements TagConstants {
     private JspCompilationContext ctxt;
     private ErrorDispatcher err;
     private ParserController parserController;
@@ -548,7 +548,7 @@ public class TagLibraryInfoImpl extends TagLibraryInfo implements TagConstants {
         TagExtraInfo tei = null;
         if (teiClassName != null && !teiClassName.equals("")) {
             try {
-                Class teiClass = ctxt.getClassLoader().loadClass(teiClassName);
+				Class teiClass = ctxt.getClassLoader().loadClass(teiClassName);
                 tei = (TagExtraInfo) teiClass.newInstance();
 	    } catch (Exception e) {
                 err.jspError("jsp.error.teiclass.instantiation", teiClassName,
@@ -664,7 +664,7 @@ public class TagLibraryInfoImpl extends TagLibraryInfo implements TagConstants {
 	return new TagFileInfo(name, path, tagInfo);
     }
 
-    private TagAttributeInfo createAttribute(TreeNode elem, String jspVersion)
+	private TagAttributeInfo createAttribute(TreeNode elem, String jspVersion)
             throws JasperException {
 
         String name = null;
