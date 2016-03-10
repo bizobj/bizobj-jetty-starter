@@ -5,7 +5,9 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 
 import javax.naming.Context;
@@ -101,11 +103,11 @@ public class ContextStarter {
         Handler root = delpoyRootCtx();
 
         //The target web app
-        Handler oxApp = deployAppCtx(es, warFolder, webXml);
+        Handler app = deployAppCtx(es, warFolder, webXml);
 
         //Bind contexts to server
         ContextHandlerCollection contexts = new ContextHandlerCollection();
-        contexts.setHandlers(new Handler[] { root, oxApp });
+        contexts.setHandlers(new Handler[] { root, app });
         server.setHandler(contexts);
 
         server.start();
@@ -155,8 +157,11 @@ public class ContextStarter {
 
     /**
      * Apply resources in jars' META-INF/resources, and web-fragment.xml in jars;
-     * See {@link MetaInfConfiguration#preConfigure(WebAppContext)}, {@link WebInfConfiguration#configure(WebAppContext)},
-     * {@link MetaData#setDefaults(Resource)}, {@link MetaData#orderFragments()} for detail.
+     * @see {@link MetaInfConfiguration#preConfigure(WebAppContext)},
+     *      {@link WebInfConfiguration#configure(WebAppContext)},
+     *      {@link MetaData#setDefaults(Resource)},
+     *      {@link MetaData#orderFragments()},
+     *      {@link MetaInfConfiguration#scanForFragment(WebAppContext, Resource, java.util.concurrent.ConcurrentHashMap)}
      * @param ctx
      * @throws Exception 
      * @throws IOException 
@@ -171,17 +176,33 @@ public class ContextStarter {
         ctx.setBaseResource(new ResourceCollection(collection));
 
     	String[] fragmentXmls = Misc.findClasspathResources("META-INF/web-fragment.xml");
-    	//FIXME We need sort here, because by default, web-fragment.xml files should be loaded by the order of jar's name
+    	//We need sort here, because by default, web-fragment.xml files should be loaded by the order of jar's name;
+    	//  - IF web-fragment.xml in a folder, it should has the path like 'file:/path/classes/META-INF/web-fragment.xml'
+    	//  - IF web-fragment.xml in a jar, it shoule has the path like 'jar:file:/path/file.jar!/META-INF/web-fragment.xml'
+    	// so sort should make classes before jars.
     	Arrays.sort(fragmentXmls);
-        ctx.getMetaData().setOrdering(new Ordering.RelativeOrdering(ctx.getMetaData()));
-    	//Yes, they're always like "jar:/path/file.jar!/META-INF/web-fragment.xml"
-    	//FIXME Can't support web-fragment.xml in class folder
+        final MetaData metaData = ctx.getMetaData();
+        metaData.setOrdering(new Ordering.RelativeOrdering(metaData));
+        List<Resource> jarResources = new ArrayList<Resource>();
+        List<Resource> dirResources = new ArrayList<Resource>();
     	for (int i = 0; i < fragmentXmls.length; i++) {
 			String xmlRes = fragmentXmls[i];
-			String jarRes = xmlRes.substring("jar:".length(), xmlRes.length()-"!/META-INF/web-fragment.xml".length());
-			ctx.getMetaData().addWebInfJar(Resource.newResource(jarRes));	//Jetty should auto-search web-fragment in WEB-INF jars
+			if (xmlRes.startsWith("jar:")){
+				String jarRes = xmlRes.substring("jar:".length(), xmlRes.length()-"!/META-INF/web-fragment.xml".length());
+				jarResources.add(Resource.newResource(jarRes));
+			}else{
+				String dirRes = xmlRes.substring(0, xmlRes.length()-"/META-INF/web-fragment.xml".length());
+				dirResources.add(Resource.newResource(dirRes));
+			}
 		}
-    	ctx.getMetaData().orderFragments();
+    	//FIXME: NOT support auto-search web-fragment in classpath
+    	metaData.setWebInfClassesDirs(dirResources);
+    	//Auto-search web-fragment in WEB-INF jars
+    	for (Resource r: jarResources){
+    		metaData.addWebInfJar(r);
+    	}
+    	//Final ...
+    	metaData.orderFragments();
     }
     
     /**
