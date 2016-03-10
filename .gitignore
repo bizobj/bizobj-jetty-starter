@@ -1,1 +1,9 @@
-/.project
+*.class
+
+# Package Files #
+#*.jar
+*.war
+*.ear
+
+# log files
+*.log
