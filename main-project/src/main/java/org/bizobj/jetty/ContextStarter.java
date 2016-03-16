@@ -2,13 +2,13 @@ package org.bizobj.jetty;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.naming.Context;
 import javax.naming.InitialContext;
@@ -45,7 +45,7 @@ import org.eclipse.jetty.webapp.WebInfConfiguration;
  *  - CTX_PATH:  context path
  *  - JDBC_URL:  jdbc url
  * </pre>
- * @author root
+ * @author thinkbase.net
  */
 public class ContextStarter {
 	public static final String VAR_JDBC_URL = "JDBC_URL";
@@ -161,13 +161,11 @@ public class ContextStarter {
      *      {@link WebInfConfiguration#configure(WebAppContext)},
      *      {@link MetaData#setDefaults(Resource)},
      *      {@link MetaData#orderFragments()},
-     *      {@link MetaInfConfiguration#scanForFragment(WebAppContext, Resource, java.util.concurrent.ConcurrentHashMap)}
+     *      {@link MetaInfConfiguration#scanForFragment(WebAppContext, Resource, ConcurrentHashMap)}
      * @param ctx
-     * @throws Exception 
-     * @throws IOException 
-     * @throws MalformedURLException 
+     * @throws IOException
      */
-    private static void applyMetaInfResourcesAndFragmentXml(WebAppContext ctx) throws MalformedURLException, IOException, Exception{
+    private static void applyMetaInfResourcesAndFragmentXml(WebAppContext ctx) throws IOException{
     	String[] metaInfResources = Misc.findClasspathResources("META-INF/resources");
     	Resource[] collection=new Resource[]{
         		ctx.getBaseResource(),
@@ -208,7 +206,7 @@ public class ContextStarter {
     /**
      * Get the resource of specified web content folder
      * @param resourceFileName
-     * @return
+     * @return The resource
      * @throws IOException
      * @throws URISyntaxException
      */

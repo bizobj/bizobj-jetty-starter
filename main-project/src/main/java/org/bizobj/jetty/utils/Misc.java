@@ -29,7 +29,7 @@ public class Misc {
 
     /**
 	 * Catch all kinds of Exceptions and throw as RuntimeException
-	 * @param t
+	 * @param throwable
 	 * @throws RuntimeException
 	 */
 	public static void throwRuntime(Throwable throwable) throws RuntimeException {
@@ -43,7 +43,7 @@ public class Misc {
 	 * Find the root cause which match the given level exception type, if not found, return null
 	 * @param topEx The exception in the top of stack
 	 * @param stopLevel exception type to find
-	 * @return
+	 * @return the root cause
 	 */
 	@SuppressWarnings("unchecked")
 	public static <T> T findCause(Throwable topEx, Class<T> stopLevel){
