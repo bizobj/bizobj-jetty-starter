@@ -121,7 +121,7 @@ public class ContextStarter {
     private static Handler delpoyRootCtx() throws IOException, URISyntaxException {
         ServletContextHandler root = new ServletContextHandler(ServletContextHandler.SESSIONS);
         root.setContextPath("/");
-        root.setBaseResource(buildFolderResource("/war_root/place-holder-war-root"));
+        root.setBaseResource(Resource.newClassPathResource("/war_root"));
         root.addServlet(DefaultServlet.class, "/");    //Default servlet
         //FIXME: org.eclipse.jetty.servlet.ServletHolder.initJspServlet() need it - InitParameter "com.sun.appserv.jsp.classpath"
         root.setClassLoader(ContextStarter.class.getClassLoader());
@@ -201,21 +201,6 @@ public class ContextStarter {
     	}
     	//Final ...
     	metaData.orderFragments();
-    }
-    
-    /**
-     * Get the resource of specified web content folder
-     * @param resourceFileName
-     * @return The resource
-     * @throws IOException
-     * @throws URISyntaxException
-     */
-    private static final Resource buildFolderResource(String resourceFileName) throws IOException, URISyntaxException {
-        URL resFileUrl = ContextStarter.class.getResource(resourceFileName);
-        File resFile = new File(resFileUrl.toURI());
-        File warDir = resFile.getParentFile();
-        Resource r = new FileResource(warDir.toURI().toURL());
-        return r;
     }
     
     /**
