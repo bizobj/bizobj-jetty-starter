@@ -20,6 +20,10 @@ import javax.sql.DataSource;
 
 import org.apache.commons.dbcp.BasicDataSourceFactory;
 import org.apache.jasper.servlet.JspServlet;
+import org.bizobj.jetty.cfg.Configer;
+import org.bizobj.jetty.cfg.backward.EnvConfiger;
+import org.bizobj.jetty.cfg.model.EnvSettings;
+import org.bizobj.jetty.cfg.model.JdbcSettings;
 import org.bizobj.jetty.utils.Misc;
 import org.eclipse.jetty.jndi.NamingUtil;
 import org.eclipse.jetty.server.Handler;
@@ -38,41 +42,49 @@ import org.eclipse.jetty.webapp.WebAppContext;
 import org.eclipse.jetty.webapp.WebInfConfiguration;
 
 /**
- * The jetty server to start development workspace.<br/>
- * Run this application with following environment variables:
- * <pre>
- *  - HTTP_PORT: http port, default is 8080
- *  - CTX_PATH:  context path
- *  - JDBC_URL:  jdbc url
- * </pre>
+ * The jetty server to start development workspace.
  * @author thinkbase.net
  */
 public class ContextStarter {
-	public static final String VAR_JDBC_URL = "JDBC_URL";
-	public static final String VAR_CTX_PATH = "CTX_PATH";
-	public static final String VAR_HTTP_PORT = "HTTP_PORT";
-	
 	public static final String DEFAULT_HTTP_PORT = "8080";
     public static final String DEFAULT_CTX_PATH = "bizobj";
     public static final String DEFAULT_JDBC_URL = "sa@jdbc:hsqldb:mem:bizobj";
 
-
-    public static void startServer(URL warFolder) throws Exception {
+    /**
+     * Start server with specified war folder and configurations
+     * @param warFolder
+     * @param config
+     * @throws Exception
+     */
+    public static void startServer(URL warFolder, Configer config) throws Exception {
         File fWar = new File(warFolder.toURI());        
-        startServer(fWar.getCanonicalPath());
+        startServer(fWar.getCanonicalPath(), config);
     }
     
-    public static void startServer(String warFolder) throws Exception {
+    /**
+     * Start server with specified war folder and configurations
+     * @param warFolder
+     * @param config
+     * @throws Exception
+     */
+    public static void startServer(String warFolder, Configer config) throws Exception {
         File fWar = new File(warFolder);
         if (fWar.isFile()){
         	fWar = fWar.getParentFile();
         }
         
 		File webXml = new File(fWar.getCanonicalPath() + "/WEB-INF/web.xml");
-        startServer(fWar.getCanonicalPath(), webXml.getCanonicalPath());
+        startServer(fWar.getCanonicalPath(), webXml.getCanonicalPath(), config);
     }
     
-    public static void startServer(String warFolder, String webXml) throws Exception {
+    /**
+     * Start server with specified war folder, web.xml file and configurations
+     * @param warFolder
+     * @param webXml
+     * @param config
+     * @throws Exception
+     */
+    public static void startServer(String warFolder, String webXml, Configer config) throws Exception {
         File fWar = new File(warFolder);
         if (fWar.isFile()){
         	fWar = fWar.getParentFile();
@@ -80,11 +92,18 @@ public class ContextStarter {
 
         Resource r = new FileResource((fWar.toURI().toURL()));
         File w = new File(webXml);
-        startServer(r, w);
+        startServer(r, w, config);
     }
 
-    public static void startServer(Resource warFolder, File webXml) throws Exception {
-        EnvSettings es = readEnv();
+    /**
+     * Start server with specified war folder, web.xml file and configurations
+     * @param warFolder
+     * @param webXml
+     * @param config
+     * @throws Exception
+     */
+    public static void startServer(Resource warFolder, File webXml, Configer config) throws Exception {
+        EnvSettings es = EnvSettings.readCfg(config);
         
         //System properties for logging
         System.setProperty("org.eclipse.jetty.LEVEL", "ALL");
@@ -93,10 +112,10 @@ public class ContextStarter {
         //System.setProperty("org.apache.jasper.compiler.disablejsr199", "true");
         
         //Try to stop the previous server instance
-        URL stop = new URL("http://127.0.0.1:" + es.httpPort + "/STOP");
+        URL stop = new URL("http://127.0.0.1:" + es.getHttpPort() + "/STOP");
         try{ stop.openStream(); }catch(Exception ex){ /*Ignore it*/}
         
-        final Server server = new Server(es.httpPort);
+        final Server server = new Server(es.getHttpPort());
         prepareDataSource(server, es);
 
         //The ROOT web app
@@ -112,11 +131,17 @@ public class ContextStarter {
 
         server.start();
         System.out.println("********************************************************************************");
-        System.out.println("Embeded Jetty("+Server.getVersion()+") Server started at port ["+es.httpPort+"].");
+        System.out.println("Embeded Jetty("+Server.getVersion()+") Server started at port ["+es.getHttpPort()+"].");
         System.out.println("********************************************************************************");
         server.join();
     }
 
+    /**
+     * Deploy a "root" context, to receive the "STOP" http request
+     * @return
+     * @throws IOException
+     * @throws URISyntaxException
+     */
     @SuppressWarnings("serial")
     private static Handler delpoyRootCtx() throws IOException, URISyntaxException {
         ServletContextHandler root = new ServletContextHandler(ServletContextHandler.SESSIONS);
@@ -139,11 +164,19 @@ public class ContextStarter {
         return root;
     }
 
+    /**
+     * Deploy Web app context
+     * @param es
+     * @param res
+     * @param descriptor
+     * @return
+     * @throws Exception
+     */
     private static WebAppContext deployAppCtx(EnvSettings es, Resource res, File descriptor) throws Exception {
         WebAppContext web = new WebAppContext();
         web.setDescriptor(descriptor.getCanonicalPath());
         web.setBaseResource(res);
-        web.setContextPath("/" + es.ctxPath);
+        web.setContextPath("/" + es.getCtxPath());
         web.setParentLoaderPriority(true);
         //Apply resources in jars' META-INF/resources, and web-fragment.xml in jars
         applyMetaInfResourcesAndFragmentXml(web);
@@ -221,135 +254,67 @@ public class ContextStarter {
             Thread.currentThread().setContextClassLoader(oldLoader);
         }
 
+        List<JdbcSettings> jdbcs = es.getJdbcList();
         if (null != envContext){
-            Properties p = new Properties();
-            p.put("driverClassName", es.getJdbcDriver());
-            p.put("url", es.jdbcUrl);
-            p.put("username", es.dbUser);
-            p.put("password", es.dbPass);
-            
-            //DBCP Properties for testing
-            p.put("maxActive", "5");
-            p.put("maxWait", "60000");
-            p.put("minIdle", "0");
-            p.put("maxIdle", "1");
-            
-            p.put("validationQuery", es.getValidationQuery());
-            DataSource ds = BasicDataSourceFactory.createDataSource(p);
-            
-            NamingUtil.bind(envContext, es.getJndiName(), ds);
+        	for(JdbcSettings jdbc: jdbcs){
+                Properties p = new Properties();
+                p.put("driverClassName", jdbc.getJdbcDriver());
+                p.put("url", jdbc.getJdbcUrl());
+                p.put("username", jdbc.getDbUser());
+                p.put("password", jdbc.getDbPass());
+                
+                //FIXME: DBCP Properties were UNCHANGEABLE
+                p.put("maxActive", "5");
+                p.put("maxWait", "60000");
+                p.put("minIdle", "0");
+                p.put("maxIdle", "1");
+                
+                p.put("validationQuery", jdbc.getValidationQuery());
+                DataSource ds = BasicDataSourceFactory.createDataSource(p);
+                NamingUtil.bind(envContext, jdbc.getJndiName(), ds);
+                
+                System.out.println(">>> DataSource ["+jdbc.getJndiName()+"] created:");
+                System.out.println(">>> \t url: " + jdbc.getJdbcUrl());
+        	}
         }
-        
-        System.out.println(">>> DataSource ["+es.getJndiName()+"] created:");
-        System.out.println(">>> \t url: " + es.jdbcUrl);
     }
     
-    private static EnvSettings readEnv(){
-        EnvSettings es = new EnvSettings();
-        es.httpPort = Integer.valueOf(_readEnv(VAR_HTTP_PORT, DEFAULT_HTTP_PORT));
-		es.ctxPath = _readEnv(VAR_CTX_PATH, DEFAULT_CTX_PATH);
-        
-        //Analysis JDBC URL String: user/pass@...
-        String rawUrl = _readEnv(VAR_JDBC_URL, DEFAULT_JDBC_URL);
-        int firstAt = rawUrl.indexOf('@');
-        if (firstAt<0){
-        	es.jdbcUrl = rawUrl;
-        	es.dbPass = "";
-        	es.dbUser = "";
-        }else{
-        	String userpass = rawUrl.substring(0, firstAt);
-        	String url = rawUrl.substring(firstAt+1);
-        	String[] tmp = userpass.split("\\/");
-        	String user = tmp.length>0?tmp[0]:"";
-        	String pass = tmp.length>1?tmp[1]:"";
-        	es.jdbcUrl = url;
-        	es.dbUser = user;
-        	es.dbPass = pass;
-        }
-        
-        return es;
-    }
-    private static String _readEnv(String var, String defVal){
-        String v = System.getProperty(var);
-        if (null==v){
-            v=System.getenv(var);
-        }
-        if (null==v){
-            v=defVal;
-        }
-        if (null!=v){
-            System.setProperty(var, v);        //Remember the real variable value into System Properties
-        }
-        return v;
-    }
     /**
-     * Store the settings defined by environment variables
-     * @author root
-     *
+     * @deprecated {@link #startServer(URL, Configer)}
+     * @param warFolder
+     * @throws Exception
      */
-    private static class EnvSettings{
-        private int httpPort;
-        private String ctxPath;
-        private String jdbcUrl;
-        private String dbUser;
-        private String dbPass;
-        
-        private String _jdbcUrl(){
-            return (null==this.jdbcUrl)?"":this.jdbcUrl;
-        }
-        /** jdbc:oracle:thin:@localhost:1521:XE */
-        private boolean isOracle(){
-            return _jdbcUrl().startsWith("jdbc:oracle:thin:");
-        }
-        /** jdbc:sqlserver://localhost:1433;databaseName=orderMgr */
-        private boolean isMSSQL(){
-            return _jdbcUrl().startsWith("jdbc:sqlserver://");
-        }
-        /** jdbc:jtds:sqlserver://localhost:1433/orderMgr */
-        private boolean isMSSQL_JTDS(){
-            return _jdbcUrl().startsWith("jdbc:jtds:sqlserver://");
-        }
-        /** jdbc:mysql://localhost:3306/orderMgr?useUnicode=true&amp;characterEncoding=UTF-8 */
-        private boolean isMySQL(){
-            return _jdbcUrl().startsWith("jdbc:mysql://");
-        }
-        /** jdbc:hsqldb:hsql://localhost/TestHSQLDB */
-        private boolean isHSQL(){
-            return _jdbcUrl().startsWith("jdbc:hsqldb:");
-        }
-        
-        private String getJndiName(){
-            return "jdbc/"+this.ctxPath+"DS";
-        }
-        private String getJdbcDriver(){
-            if (isOracle()){
-                return "oracle.jdbc.driver.OracleDriver";
-            }else if (isMSSQL()){
-                return "com.microsoft.sqlserver.jdbc.SQLServerDriver";
-            }else if (isMSSQL_JTDS()){
-                return "net.sourceforge.jtds.jdbc.Driver";
-            }else if (isMySQL()){
-                return "com.mysql.jdbc.Driver";
-            }else if (isHSQL()){
-                return "org.hsqldb.jdbcDriver";
-            }else{
-                throw new RuntimeException("Unknown database type ["+this.jdbcUrl+"]");
-            }
-        }
-        private String getValidationQuery(){
-            if (isOracle()){
-                return "SELECT 1 From dual";
-            }else if (isMSSQL()){
-                return "Select 1";
-            }else if (isMSSQL_JTDS()){
-                return "Select 1";
-            }else if (isMySQL()){
-                return "Select 1";
-            }else if (isHSQL()){
-                return "Select COUNT(*) As X From INFORMATION_SCHEMA.SYSTEM_USERS Where 1=0";
-            }else{
-                throw new RuntimeException("Unknown database type ["+this.jdbcUrl+"]");
-            }
-        }
+    public static void startServer(URL warFolder) throws Exception {
+    	startServer(warFolder, new EnvConfiger());
     }
+    
+    /**
+     * @deprecated {@link #startServer(String, Configer)}
+     * @param warFolder
+     * @throws Exception
+     */
+    public static void startServer(String warFolder) throws Exception {
+    	startServer(warFolder, new EnvConfiger());
+    }
+    
+    /**
+     * @deprecated {@link #startServer(String, String, Configer)}
+     * @param warFolder
+     * @param webXml
+     * @throws Exception
+     */
+    public static void startServer(String warFolder, String webXml) throws Exception {
+    	startServer(warFolder, webXml, new EnvConfiger());
+    }
+
+    /**
+     * @deprecated {@link #startServer(Resource, File, Configer)}
+     * @param warFolder
+     * @param webXml
+     * @throws Exception
+     */
+    public static void startServer(Resource warFolder, File webXml) throws Exception {
+    	startServer(warFolder, webXml, new EnvConfiger());
+    }
+
 }
